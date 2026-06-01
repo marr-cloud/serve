@@ -1,0 +1,28 @@
+# Binarios compilados
+serve
+serve.exe
+/bin/
+/dist/
+
+# Go test/coverage
+*.test
+*.out
+coverage.txt
+coverage.html
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Dependencias / vendoring (si se usa)
+/vendor/
+
+# Claude Code local settings (machine-specific)
+.claude/settings.local.json
