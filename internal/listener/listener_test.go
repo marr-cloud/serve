@@ -25,8 +25,9 @@ func TestBuild_BindsEphemeralPort(t *testing.T) {
 }
 
 func TestBuild_BadURIErrors(t *testing.T) {
-	_, err := Build([]string{"unix:/tmp/x.sock"}, true, nil)
+	// `unix:` and `pipe:` are real schemes in F3; use a scheme nobody knows.
+	_, err := Build([]string{"garbage://x"}, true, nil)
 	if err == nil {
-		t.Fatal("expected error for unsupported scheme")
+		t.Fatal("expected error for unknown scheme")
 	}
 }

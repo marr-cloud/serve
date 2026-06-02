@@ -3,14 +3,24 @@
 package listener
 
 import (
+	"fmt"
 	"net"
 	"os"
-	"path/filepath"
 	"testing"
 )
 
+// shortSockPath returns a path under /tmp that respects macOS's
+// 104-byte sun_path limit. t.TempDir() on Darwin produces paths under
+// /var/folders/... that routinely exceed that limit.
+func shortSockPath(t *testing.T, name string) string {
+	t.Helper()
+	p := fmt.Sprintf("/tmp/serve-%s-%d.sock", name, os.Getpid())
+	t.Cleanup(func() { _ = os.Remove(p) })
+	return p
+}
+
 func TestBuildUnix_BindsAndCleansUp(t *testing.T) {
-	sock := filepath.Join(t.TempDir(), "test.sock")
+	sock := shortSockPath(t, "bind")
 	ln, err := buildUnix(sock)
 	if err != nil {
 		t.Fatalf("buildUnix: %v", err)
@@ -36,7 +46,7 @@ func TestBuildUnix_BindsAndCleansUp(t *testing.T) {
 }
 
 func TestBuildUnix_RemovesStaleSocketFile(t *testing.T) {
-	sock := filepath.Join(t.TempDir(), "stale.sock")
+	sock := shortSockPath(t, "stale")
 	if err := os.WriteFile(sock, []byte{}, 0o600); err != nil {
 		t.Fatalf("seed stale file: %v", err)
 	}
