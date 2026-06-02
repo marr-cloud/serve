@@ -79,6 +79,29 @@ func ParseListenURI(input string) (string, error) {
 	return net.JoinHostPort(host, port), nil
 }
 
+// ParseListenURIScheme parses a listen URI and returns its scheme
+// ("tcp" | "unix" | "pipe") and the transport-specific address.
+// For unix, addr is a filesystem path. For pipe, it's the raw pipe path
+// (e.g. `\\.\pipe\serve`). For tcp, it's `host:port` (canonicalized by
+// ParseListenURI). Unknown schemes return an error.
+func ParseListenURIScheme(input string) (scheme, addr string, err error) {
+	switch {
+	case strings.HasPrefix(input, "unix://"):
+		return "unix", strings.TrimPrefix(input, "unix://"), nil
+	case strings.HasPrefix(input, "unix:"):
+		return "unix", strings.TrimPrefix(input, "unix:"), nil
+	case strings.HasPrefix(input, "pipe://"):
+		return "pipe", strings.TrimPrefix(input, "pipe://"), nil
+	case strings.HasPrefix(input, "pipe:"):
+		return "pipe", strings.TrimPrefix(input, "pipe:"), nil
+	}
+	addr, err = ParseListenURI(input)
+	if err != nil {
+		return "", "", err
+	}
+	return "tcp", addr, nil
+}
+
 func validatePort(p string) error {
 	n, err := strconv.Atoi(p)
 	if err != nil {

@@ -193,13 +193,14 @@ func (c *core) serveFile(w http.ResponseWriter, r *http.Request, fsPath string) 
 		}
 	}
 
-	wantGzip := !c.cfg.NoCompression &&
+	encoding := compress.Negotiate(r.Header.Get("Accept-Encoding"))
+	wantCompress := !c.cfg.NoCompression &&
 		r.Header.Get("Range") == "" && // [BUG#1] never compress when Range is requested
-		compress.Negotiate(r.Header.Get("Accept-Encoding")) == "gzip" &&
+		encoding != "" &&
 		isCompressible(contentType, fsPath, info.Size())
 
-	if wantGzip {
-		w.Header().Set("Content-Encoding", "gzip")
+	if wantCompress {
+		w.Header().Set("Content-Encoding", encoding)
 		w.Header().Set("Vary", "Accept-Encoding")
 		// [BUG#2] Content-Length is unknown post-compression; let Go use chunked TE.
 		w.Header().Del("Content-Length")
@@ -213,9 +214,15 @@ func (c *core) serveFile(w http.ResponseWriter, r *http.Request, fsPath string) 
 			return
 		}
 		defer f.Close()
-		gz := compress.NewGzipEncoder(w)
-		defer gz.Close()
-		_, _ = io.Copy(gz, f)
+
+		var enc compress.Encoder
+		if encoding == "br" {
+			enc = compress.NewBrotliEncoder(w)
+		} else {
+			enc = compress.NewGzipEncoder(w)
+		}
+		defer enc.Close()
+		_, _ = io.Copy(enc, f)
 		return
 	}
 

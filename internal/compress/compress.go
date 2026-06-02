@@ -13,29 +13,51 @@ type Encoder interface {
 	io.WriteCloser
 }
 
-// Negotiate inspects an Accept-Encoding header and returns the chosen encoding.
-// Returns "" (identity) when no supported encoding is acceptable.
+// Negotiate inspects an Accept-Encoding header value and returns the
+// preferred encoding among "br", "gzip", and "" (identity). Preference:
+// higher q-value wins; on ties, br > gzip > identity. A "*" token is
+// expanded to whichever of br/gzip were not explicitly listed.
 func Negotiate(acceptEncoding string) string {
 	if acceptEncoding == "" {
 		return ""
 	}
-	gzipWeight, starWeight := -1.0, -1.0
+	brQ, gzipQ, starQ := -1.0, -1.0, -1.0
 	for _, part := range strings.Split(acceptEncoding, ",") {
 		token, q := parseEncoding(strings.TrimSpace(part))
 		switch token {
+		case "br":
+			if q > brQ {
+				brQ = q
+			}
 		case "gzip":
-			gzipWeight = q
+			if q > gzipQ {
+				gzipQ = q
+			}
 		case "*":
-			starWeight = q
+			if q > starQ {
+				starQ = q
+			}
 		}
 	}
-	if gzipWeight > 0 {
-		return "gzip"
+	// Star fills in any encoding the client didn't mention.
+	if brQ < 0 && starQ >= 0 {
+		brQ = starQ
 	}
-	if gzipWeight < 0 && starWeight > 0 {
-		return "gzip"
+	if gzipQ < 0 && starQ >= 0 {
+		gzipQ = starQ
 	}
-	return ""
+	switch {
+	case brQ > gzipQ && brQ > 0:
+		return "br"
+	case gzipQ > brQ && gzipQ > 0:
+		return "gzip"
+	case brQ > 0: // tie → br wins
+		return "br"
+	case gzipQ > 0:
+		return "gzip"
+	default:
+		return ""
+	}
 }
 
 func parseEncoding(s string) (string, float64) {

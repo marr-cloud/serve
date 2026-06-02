@@ -13,6 +13,8 @@ import (
 	"testing/fstest"
 	"time"
 
+	"github.com/andybalholm/brotli"
+
 	"serve/internal/config"
 	"serve/internal/rules"
 )
@@ -109,6 +111,59 @@ func TestServe_RangeDisablesGzip(t *testing.T) {
 	h := newHandler(config.Config{}, mkFS())
 	req := httptest.NewRequest("GET", "/app.js", nil)
 	req.Header.Set("Accept-Encoding", "gzip")
+	req.Header.Set("Range", "bytes=0-49")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusPartialContent {
+		t.Fatalf("status %d, want 206", rec.Code)
+	}
+	if rec.Header().Get("Content-Encoding") != "" {
+		t.Fatalf("Content-Encoding %q (must be empty when Range is set)", rec.Header().Get("Content-Encoding"))
+	}
+	if rec.Body.Len() != 50 {
+		t.Fatalf("body length %d, want 50", rec.Body.Len())
+	}
+}
+
+func TestServe_BrotliForJS(t *testing.T) {
+	h := newHandler(config.Config{}, mkFS())
+	req := httptest.NewRequest("GET", "/app.js", nil)
+	req.Header.Set("Accept-Encoding", "br")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != 200 {
+		t.Fatalf("status %d", rec.Code)
+	}
+	if rec.Header().Get("Content-Encoding") != "br" {
+		t.Fatalf("Content-Encoding %q", rec.Header().Get("Content-Encoding"))
+	}
+	if rec.Header().Get("Vary") != "Accept-Encoding" {
+		t.Fatalf("Vary %q", rec.Header().Get("Vary"))
+	}
+	got, err := io.ReadAll(brotli.NewReader(rec.Body))
+	if err != nil {
+		t.Fatalf("brotli decode: %v", err)
+	}
+	if !strings.HasPrefix(string(got), "var x = 1;") {
+		t.Fatal("decoded prefix wrong")
+	}
+}
+
+func TestServe_PreferBrotliOverGzip(t *testing.T) {
+	h := newHandler(config.Config{}, mkFS())
+	req := httptest.NewRequest("GET", "/app.js", nil)
+	req.Header.Set("Accept-Encoding", "gzip, br")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Header().Get("Content-Encoding") != "br" {
+		t.Fatalf("Content-Encoding %q, want br", rec.Header().Get("Content-Encoding"))
+	}
+}
+
+func TestServe_RangeDisablesBrotli(t *testing.T) {
+	h := newHandler(config.Config{}, mkFS())
+	req := httptest.NewRequest("GET", "/app.js", nil)
+	req.Header.Set("Accept-Encoding", "br")
 	req.Header.Set("Range", "bytes=0-49")
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)

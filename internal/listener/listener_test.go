@@ -6,7 +6,7 @@ import (
 )
 
 func TestBuild_BindsEphemeralPort(t *testing.T) {
-	lns, err := Build([]string{":0"}, true)
+	lns, err := Build([]string{":0"}, true, nil)
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
@@ -25,7 +25,7 @@ func TestBuild_BindsEphemeralPort(t *testing.T) {
 }
 
 func TestBuild_BadURIErrors(t *testing.T) {
-	_, err := Build([]string{"unix:/tmp/x.sock"}, true)
+	_, err := Build([]string{"unix:/tmp/x.sock"}, true, nil)
 	if err == nil {
 		t.Fatal("expected error for unsupported scheme")
 	}

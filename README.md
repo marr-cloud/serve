@@ -4,7 +4,7 @@ A static file server that aims for behavioral parity with the npm `serve` CLI, i
 
 ## Status
 
-Phase 2 complete: `serve.json` parity (rewrites, redirects, headers, cleanUrls, trailingSlash, directoryListing, unlisted, renderSingle, public, symlinks). Phase 3 (Brotli, HTTPS, Unix sockets) is the next milestone. See `docs/superpowers/specs/` for the full roadmap.
+Phase 3 complete: Brotli compression, HTTPS (`--ssl-cert`/`--ssl-key`/`--ssl-pass`), Unix domain sockets (Linux/macOS), and Windows named pipes are now supported in addition to the Phase 2 `serve.json` parity. See `docs/superpowers/specs/` for the full roadmap.
 
 ## Install
 
@@ -47,8 +47,32 @@ serve -l :4000 -l :4001 ./public  # multiple listen addresses
 | `--no-etag` | Send `Last-Modified` instead of `ETag` |
 | `-S`, `--symlinks` | Resolve symlinks instead of returning 404 |
 | `--no-port-switching` | Fail instead of trying successor ports when the requested port is taken |
+| `--ssl-cert <path>` | PEM cert file for HTTPS (requires `--ssl-key`) |
+| `--ssl-key <path>` | PEM private key file for HTTPS |
+| `--ssl-pass <path>` | File containing passphrase for an encrypted PKCS#1 key. PKCS#8-encrypted keys are not supported; convert with `openssl pkcs8 -in key.pem -traditional -out key.pkcs1.pem` |
 | `-v`, `--version` | Print version and exit |
 | `--help` | Print help and exit |
+
+## HTTPS
+
+```bash
+serve --ssl-cert ./cert.pem --ssl-key ./key.pem ./public
+```
+
+For an encrypted key, place the passphrase in a file (no trailing newline) and pass `--ssl-pass`. Only PKCS#1 PEM (`BEGIN RSA PRIVATE KEY` with a `Proc-Type` header) is supported. Modern openssl produces PKCS#8 by default; convert with `openssl pkcs8 -in key.pem -traditional -out key.pkcs1.pem`.
+
+TLS minimum is 1.2. There's no support for autocert / Let's Encrypt — front with Caddy or nginx for that.
+
+## Alternative listeners
+
+Beyond TCP, the `-l` flag accepts:
+
+```bash
+serve -l unix:/tmp/serve.sock ./public         # Linux/macOS only
+serve -l "pipe:\\.\pipe\serve" ./public        # Windows only
+```
+
+Unix sockets are created with mode `0660` and removed on shutdown. Named pipes use the SDDL `D:P(A;;GA;;;WD)` (allow `Everyone`), appropriate for a local-only file server. TLS is wrapped around TCP/unix listeners when `--ssl-cert` is set; pipes are local-only and not wrapped.
 
 ## serve.json
 
@@ -85,7 +109,8 @@ If a `serve.json` exists in the served directory (or you pass `-c <path>`), `ser
 
 ## Behavioral notes
 
-- `gzip` and `Range` are mutually exclusive: a request with a `Range` header is served identity-encoded even if a `headers` rule sets `Content-Encoding`.
+- Compression auto-detection: when the client sends `Accept-Encoding: br, gzip`, `serve` emits brotli (preference `br > gzip > identity` on ties; explicit q-values still win). `*` matches any encoding and resolves to brotli.
+- `Range` requests are served identity-encoded regardless of `Accept-Encoding` — both gzip and brotli are skipped when a `Range` header is present.
 - SPA fallback (`-s`) only applies to GET/HEAD requests with `Accept: text/html` and a URL path without a known asset extension. Requests to `/api/*` or `*.json` return 404 normally.
 - ETag is `"<modtime-unix-nanos>-<size>"`, deterministic across processes and machines.
 - Directory listings are HTML-escaped (no XSS via filenames).

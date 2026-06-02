@@ -5,6 +5,38 @@ import (
 	"testing"
 )
 
+func TestParseListenURIScheme(t *testing.T) {
+	cases := []struct {
+		in         string
+		wantScheme string
+		wantAddr   string
+		wantErr    bool
+	}{
+		{"3000", "tcp", "0.0.0.0:3000", false},
+		{":3000", "tcp", "0.0.0.0:3000", false},
+		{"127.0.0.1:3000", "tcp", "127.0.0.1:3000", false},
+		{"tcp://0.0.0.0:8080", "tcp", "0.0.0.0:8080", false},
+		{"unix:/tmp/serve.sock", "unix", "/tmp/serve.sock", false},
+		{"unix:///tmp/serve.sock", "unix", "/tmp/serve.sock", false},
+		{`pipe:\\.\pipe\serve`, "pipe", `\\.\pipe\serve`, false},
+		{"garbage://x", "", "", true},
+	}
+	for _, c := range cases {
+		t.Run(c.in, func(t *testing.T) {
+			scheme, addr, err := ParseListenURIScheme(c.in)
+			if (err != nil) != c.wantErr {
+				t.Fatalf("err=%v wantErr=%v", err, c.wantErr)
+			}
+			if err != nil {
+				return
+			}
+			if scheme != c.wantScheme || addr != c.wantAddr {
+				t.Fatalf("scheme=%q addr=%q, want %q / %q", scheme, addr, c.wantScheme, c.wantAddr)
+			}
+		})
+	}
+}
+
 func TestParseListenURI(t *testing.T) {
 	tests := []struct {
 		name    string

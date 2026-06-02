@@ -60,6 +60,26 @@ func TestParseFlags(t *testing.T) {
 	}
 }
 
+func TestParseFlags_SSLFlags(t *testing.T) {
+	cfg, set, err := ParseFlags([]string{
+		"serve",
+		"--ssl-cert", "/etc/cert.pem",
+		"--ssl-key", "/etc/key.pem",
+		"--ssl-pass", "/etc/pass.txt",
+	})
+	if err != nil {
+		t.Fatalf("ParseFlags: %v", err)
+	}
+	if cfg.SSLCert != "/etc/cert.pem" || cfg.SSLKey != "/etc/key.pem" || cfg.SSLPass != "/etc/pass.txt" {
+		t.Fatalf("cfg=%+v", cfg)
+	}
+	for _, name := range []string{"ssl-cert", "ssl-key", "ssl-pass"} {
+		if !set[name] {
+			t.Fatalf("expected %s in cliSet", name)
+		}
+	}
+}
+
 func TestParseFlags_ReturnsCLISet(t *testing.T) {
 	cfg, set, err := ParseFlags([]string{"serve", "-p", "8080", "-s", "."})
 	if err != nil {

@@ -20,4 +20,7 @@ type Config struct {
 	NoPortSwitching  bool
 	Help             bool
 	Version          bool
+	SSLCert          string
+	SSLKey           string
+	SSLPass          string
 }

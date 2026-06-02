@@ -79,7 +79,12 @@ func main() {
 		}
 	}
 
-	listeners, err := listener.Build(cfg.Listen, !cfg.NoPortSwitching)
+	tlsCfg, err := listener.LoadTLSConfig(cfg.SSLCert, cfg.SSLKey, cfg.SSLPass)
+	if err != nil {
+		log.Fatalf("tls: %v", err)
+	}
+
+	listeners, err := listener.Build(cfg.Listen, !cfg.NoPortSwitching, tlsCfg)
 	if err != nil {
 		log.Fatalf("listener: %v", err)
 	}
@@ -100,14 +105,18 @@ func main() {
 	}
 
 	// [BUG#9] Compute the real local address from the first listener (post port-switch).
+	scheme := "http"
+	if tlsCfg != nil {
+		scheme = "https"
+	}
 	localAddr := ""
 	if len(listeners) > 0 {
 		if _, port, splitErr := net.SplitHostPort(listeners[0].Addr().String()); splitErr == nil {
-			localAddr = "http://localhost:" + port
+			localAddr = scheme + "://localhost:" + port
 		}
 	}
 
-	printStartupMessage(cfg, listeners, localAddr)
+	printStartupMessage(cfg, listeners, localAddr, scheme)
 
 	if !cfg.NoClipboard && localAddr != "" {
 		_ = clipboard.New().CopyText(localAddr)
@@ -142,7 +151,7 @@ func (l lstatFS) Lstat(name string) (fs.FileInfo, error) {
 	return os.Lstat(filepath.Join(l.root, filepath.FromSlash(name)))
 }
 
-func printStartupMessage(cfg config.Config, listeners []net.Listener, localAddr string) {
+func printStartupMessage(cfg config.Config, listeners []net.Listener, localAddr, scheme string) {
 	fmt.Println("   ┌─────────────────────────────────────────────┐")
 	fmt.Println("   │                                             │")
 	fmt.Println("   │   Serving!                                  │")
@@ -155,7 +164,7 @@ func printStartupMessage(cfg config.Config, listeners []net.Listener, localAddr 
 		if strings.HasPrefix(addr, "0.0.0.0:") || strings.HasPrefix(addr, "[::]:") {
 			if ip := outboundIP(); ip != "" {
 				_, port, _ := net.SplitHostPort(addr)
-				fmt.Printf("   │   - Network:  %-30s│\n", "http://"+ip+":"+port)
+				fmt.Printf("   │   - Network:  %-30s│\n", scheme+"://"+ip+":"+port)
 			}
 		}
 	}
@@ -202,5 +211,8 @@ func printHelp() {
     -u, --no-compression         Do not compress files
     --no-etag                    Send Last-Modified header instead of ETag
     -S, --symlinks               Resolve symlinks instead of showing 404 errors
-    --no-port-switching          Do not open a port other than the one specified when it's taken`)
+    --no-port-switching          Do not open a port other than the one specified when it's taken
+    --ssl-cert <path>            PEM cert file for HTTPS (requires --ssl-key)
+    --ssl-key <path>             PEM key file for HTTPS (requires --ssl-cert)
+    --ssl-pass <path>            File containing passphrase for encrypted PKCS#1 key`)
 }
