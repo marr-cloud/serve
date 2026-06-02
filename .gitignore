@@ -1,6 +1,6 @@
 # Binarios compilados
-serve
-serve.exe
+/serve
+/serve.exe
 /bin/
 /dist/
 

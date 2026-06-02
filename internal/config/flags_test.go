@@ -1,0 +1,61 @@
+package config
+
+import (
+	"reflect"
+	"testing"
+)
+
+func TestParseFlags(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		want Config
+	}{
+		{
+			name: "defaults",
+			args: []string{"serve"},
+			want: Config{},
+		},
+		{
+			name: "directory positional",
+			args: []string{"serve", "./public"},
+			want: Config{Directory: "./public"},
+		},
+		{
+			name: "short single",
+			args: []string{"serve", "-s"},
+			want: Config{Single: true},
+		},
+		{
+			name: "long single",
+			args: []string{"serve", "--single"},
+			want: Config{Single: true},
+		},
+		{
+			name: "port short",
+			args: []string{"serve", "-p", "8080"},
+			want: Config{Port: 8080},
+		},
+		{
+			name: "multiple listen",
+			args: []string{"serve", "-l", "3000", "-l", "tcp://0.0.0.0:4000"},
+			want: Config{Listen: []string{"3000", "tcp://0.0.0.0:4000"}},
+		},
+		{
+			name: "cors and no-clipboard",
+			args: []string{"serve", "-C", "-n"},
+			want: Config{CORS: true, NoClipboard: true},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ParseFlags(tt.args)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Fatalf("got %+v, want %+v", got, tt.want)
+			}
+		})
+	}
+}
