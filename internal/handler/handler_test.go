@@ -6,12 +6,15 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"testing/fstest"
 	"time"
 
 	"serve/internal/config"
+	"serve/internal/rules"
 )
 
 func mkFS() fstest.MapFS {
@@ -26,7 +29,7 @@ func mkFS() fstest.MapFS {
 }
 
 func newHandler(cfg config.Config, fsys fstest.MapFS) http.Handler {
-	return New(cfg, fsys)
+	return New(cfg, fsys, nil)
 }
 
 func TestServe_File200(t *testing.T) {
@@ -244,4 +247,150 @@ func TestServe_OptionsWithCORS(t *testing.T) {
 	if rec.Header().Get("Access-Control-Allow-Origin") != "*" {
 		t.Fatal("expected ACAO *")
 	}
+}
+
+func mustRuleSet(t *testing.T, body string) *rules.Set {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "serve.json"), []byte(body), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	s, err := rules.Load("", dir)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	return s
+}
+
+func TestRules_RedirectFires(t *testing.T) {
+	set := mustRuleSet(t, `{"redirects":[{"source":"/old","destination":"/new"}]}`)
+	h := New(config.Config{}, mkFS(), set)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest("GET", "/old", nil))
+	if rec.Code != 301 || rec.Header().Get("Location") != "/new" {
+		t.Fatalf("got %d %q", rec.Code, rec.Header().Get("Location"))
+	}
+}
+
+func TestRules_RewriteServesAliasedFile(t *testing.T) {
+	set := mustRuleSet(t, `{"rewrites":[{"source":"/api/:id","destination":"/api/:id.json"}]}`)
+	fsys := fstest.MapFS{"api/42.json": &fstest.MapFile{Data: []byte(`{"id":42}`)}}
+	h := New(config.Config{}, fsys, set)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest("GET", "/api/42", nil))
+	if rec.Code != 200 || rec.Body.String() != `{"id":42}` {
+		t.Fatalf("got %d body=%q", rec.Code, rec.Body.String())
+	}
+}
+
+func TestRules_CleanUrlsServeHTML(t *testing.T) {
+	set := mustRuleSet(t, `{"cleanUrls": true}`)
+	fsys := fstest.MapFS{"about.html": &fstest.MapFile{Data: []byte("<h1>about</h1>")}}
+	// SetExists must close over fsys; the handler does this in cmd/serve. For
+	// tests we wire it explicitly:
+	set.SetExists(func(p string) bool {
+		_, err := fsys.Open(stripLeadingSlash(p))
+		return err == nil
+	})
+	h := New(config.Config{}, fsys, set)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest("GET", "/about", nil))
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), "about") {
+		t.Fatalf("got %d body=%q", rec.Code, rec.Body.String())
+	}
+}
+
+func TestRules_CleanUrlsRedirectsHTMLSuffix(t *testing.T) {
+	set := mustRuleSet(t, `{"cleanUrls": true}`)
+	fsys := fstest.MapFS{"about.html": &fstest.MapFile{Data: []byte("<h1>about</h1>")}}
+	set.SetExists(func(p string) bool {
+		_, err := fsys.Open(stripLeadingSlash(p))
+		return err == nil
+	})
+	h := New(config.Config{}, fsys, set)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest("GET", "/about.html", nil))
+	if rec.Code != 301 {
+		t.Fatalf("status %d, want 301", rec.Code)
+	}
+	if loc := rec.Header().Get("Location"); loc != "/about" {
+		t.Fatalf("Location %q, want /about", loc)
+	}
+}
+
+func TestRules_TrailingSlashStripOverridesF1Default(t *testing.T) {
+	set := mustRuleSet(t, `{"trailingSlash": false}`)
+	h := New(config.Config{}, mkFS(), set)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest("GET", "/sub/", nil))
+	if rec.Code != 301 || rec.Header().Get("Location") != "/sub" {
+		t.Fatalf("got %d %q", rec.Code, rec.Header().Get("Location"))
+	}
+}
+
+func TestRules_HeadersInjected(t *testing.T) {
+	set := mustRuleSet(t, `{"headers":[{"source":"/**","headers":[{"key":"Cache-Control","value":"max-age=10"}]}]}`)
+	h := New(config.Config{}, mkFS(), set)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest("GET", "/index.html", nil))
+	if got := rec.Header().Get("Cache-Control"); got != "max-age=10" {
+		t.Fatalf("Cache-Control %q", got)
+	}
+}
+
+func TestRules_DirectoryListingDisabled404(t *testing.T) {
+	set := mustRuleSet(t, `{"directoryListing": false}`)
+	h := New(config.Config{}, mkFS(), set)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest("GET", "/docs/", nil))
+	if rec.Code != 404 {
+		t.Fatalf("status %d, want 404", rec.Code)
+	}
+}
+
+func TestRules_UnlistedHidesFromListing(t *testing.T) {
+	mod := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	fsys := fstest.MapFS{
+		"area/visible.txt": &fstest.MapFile{Data: []byte("v"), ModTime: mod},
+		"area/secret.txt":  &fstest.MapFile{Data: []byte("s"), ModTime: mod},
+	}
+	set := mustRuleSet(t, `{"unlisted": ["secret.txt"]}`)
+	h := New(config.Config{}, fsys, set)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest("GET", "/area/", nil))
+	body := rec.Body.String()
+	if !strings.Contains(body, "visible.txt") || strings.Contains(body, "secret.txt") {
+		t.Fatalf("listing should hide secret.txt; got:\n%s", body)
+	}
+}
+
+func TestRules_RenderSingleServesLoneFile(t *testing.T) {
+	mod := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	fsys := fstest.MapFS{
+		"lone/only.txt": &fstest.MapFile{Data: []byte("hello"), ModTime: mod},
+	}
+	set := mustRuleSet(t, `{"renderSingle": true}`)
+	h := New(config.Config{}, fsys, set)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest("GET", "/lone/", nil))
+	if rec.Code != 200 || rec.Body.String() != "hello" {
+		t.Fatalf("got %d body=%q", rec.Code, rec.Body.String())
+	}
+}
+
+func TestRules_NilSetUnchanged(t *testing.T) {
+	h := New(config.Config{}, mkFS(), nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest("GET", "/index.html", nil))
+	if rec.Code != 200 {
+		t.Fatalf("status %d", rec.Code)
+	}
+}
+
+// helper used by TestRules_CleanUrlsServeHTML
+func stripLeadingSlash(p string) string {
+	if len(p) > 0 && p[0] == '/' {
+		return p[1:]
+	}
+	return p
 }

@@ -12,19 +12,26 @@ import (
 	"serve/internal/compress"
 	"serve/internal/config"
 	"serve/internal/mime"
+	"serve/internal/rules"
 )
 
 // New returns an http.Handler that serves files from fsys according to cfg.
-func New(cfg config.Config, fsys fs.FS) http.Handler {
-	core := &core{cfg: cfg, fsys: fsys}
+// ruleSet may be nil; when non-nil its Pre middleware runs between CORS and
+// the core handler, its Post middleware wraps the writer for header injection,
+// and its listing-query methods are consulted by the directory branch.
+func New(cfg config.Config, fsys fs.FS, ruleSet *rules.Set) http.Handler {
+	core := &core{cfg: cfg, fsys: fsys, ruleSet: ruleSet}
 	var h http.Handler = http.HandlerFunc(core.serve)
+	h = ruleSet.Post()(h)
+	h = ruleSet.Pre()(h)
 	h = corsMiddleware(cfg.CORS)(h)
 	return h
 }
 
 type core struct {
-	cfg  config.Config
-	fsys fs.FS
+	cfg     config.Config
+	fsys    fs.FS
+	ruleSet *rules.Set
 }
 
 func (c *core) serve(w http.ResponseWriter, r *http.Request) {
@@ -75,9 +82,9 @@ func (c *core) serve(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if info.IsDir() {
-		// Redirect /dir to /dir/ so relative links inside the listing or
-		// inside any index.html resolve against the correct base URL.
-		if !strings.HasSuffix(urlPath, "/") {
+		// F1 default: /dir → 301 /dir/. Suppressed by `trailingSlash: false`
+		// to avoid a redirect-strip-vs-add loop with the Pre stage.
+		if !strings.HasSuffix(urlPath, "/") && !c.ruleSet.WantsNoTrailingSlash() {
 			http.Redirect(w, r, urlPath+"/", http.StatusMovedPermanently)
 			return
 		}
@@ -86,7 +93,18 @@ func (c *core) serve(w http.ResponseWriter, r *http.Request) {
 			c.serveFile(w, r, indexPath)
 			return
 		}
-		if err := serveDirectory(w, r, c.fsys, cleaned, urlPath); err != nil {
+		// renderSingle: dir with exactly one non-hidden file → serve it directly
+		if c.ruleSet.RenderSingle() {
+			if only, ok := singleVisibleFile(c.fsys, cleaned, c.ruleSet); ok {
+				c.serveFile(w, r, only)
+				return
+			}
+		}
+		if !c.ruleSet.IsListingEnabled(urlPath) {
+			http.NotFound(w, r)
+			return
+		}
+		if err := serveDirectory(w, r, c.fsys, cleaned, urlPath, c.ruleSet); err != nil {
 			http.Error(w, "Unable to read directory", http.StatusInternalServerError)
 		}
 		return
@@ -100,6 +118,35 @@ func pathJoin(a, b string) string {
 		return b
 	}
 	return a + "/" + b
+}
+
+// singleVisibleFile returns the path of the sole non-hidden, non-directory
+// entry inside dir. Returns ("", false) if there are zero, multiple, or any
+// subdirectory entries visible.
+func singleVisibleFile(fsys fs.FS, dir string, set *rules.Set) (string, bool) {
+	entries, err := fs.ReadDir(fsys, dir)
+	if err != nil {
+		return "", false
+	}
+	var only string
+	count := 0
+	for _, e := range entries {
+		if set.IsHidden(e.Name()) {
+			continue
+		}
+		if e.IsDir() {
+			return "", false
+		}
+		count++
+		only = pathJoin(dir, e.Name())
+		if count > 1 {
+			return "", false
+		}
+	}
+	if count != 1 {
+		return "", false
+	}
+	return only, true
 }
 
 // matchesETag implements RFC 7232 multi-value If-None-Match comparison.

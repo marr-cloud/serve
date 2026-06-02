@@ -20,10 +20,11 @@ import (
 	"serve/internal/handler"
 	"serve/internal/listener"
 	"serve/internal/logx"
+	"serve/internal/rules"
 )
 
 func main() {
-	cfg, err := config.ParseFlags(os.Args)
+	cfg, cliSet, err := config.ParseFlags(os.Args)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(2)
@@ -36,6 +37,17 @@ func main() {
 		fmt.Printf("serve version %s\n", config.Version)
 		return
 	}
+
+	// Load serve.json (or -c path). cfg.Directory may still be "" here, which
+	// is intentional: MergeIntoConfig uses the empty string as the signal that
+	// no positional argument was given, and Load falls back to cwd when dir="".
+	ruleSet, err := rules.Load(cfg.ConfigFile, cfg.Directory)
+	if err != nil {
+		log.Fatalf("serve.json: %v", err)
+	}
+	ruleSet.MergeIntoConfig(&cfg, cliSet)
+
+	// Fallback to cwd only after the merge so serve.json "public" wins over it.
 	if cfg.Directory == "" {
 		wd, err := os.Getwd()
 		if err != nil {
@@ -46,6 +58,19 @@ func main() {
 	if _, err := os.Stat(cfg.Directory); err != nil {
 		log.Fatalf("directory %q: %v", cfg.Directory, err)
 	}
+
+	fsys := osDirFS(cfg.Directory)
+
+	// Install the existence callback so cleanUrls rules can check the served FS.
+	ruleSet.SetExists(func(urlPath string) bool {
+		p := strings.TrimPrefix(urlPath, "/")
+		if p == "" {
+			return false
+		}
+		_, statErr := fs.Stat(fsys, p)
+		return statErr == nil
+	})
+
 	if len(cfg.Listen) == 0 {
 		if cfg.Port != 0 {
 			cfg.Listen = []string{fmt.Sprintf("0.0.0.0:%d", cfg.Port)}
@@ -60,7 +85,7 @@ func main() {
 	}
 
 	h := logx.Middleware(log.Default(), cfg.NoRequestLogging)(
-		handler.New(cfg, osDirFS(cfg.Directory)),
+		handler.New(cfg, fsys, ruleSet),
 	)
 
 	servers := make([]*http.Server, 0, len(listeners))
@@ -170,7 +195,7 @@ func printHelp() {
     -p                           Specify custom port
     -s, --single                 Rewrite all not-found requests to index.html
     -d, --debug                  Show debugging information
-    -c, --config                 Specify custom path to serve.json (planned, F2)
+    -c, --config                 Specify custom path to serve.json
     -L, --no-request-logging     Do not log any request information
     -C, --cors                   Enable CORS, sets Access-Control-Allow-Origin to *
     -n, --no-clipboard           Do not copy the local address to the clipboard

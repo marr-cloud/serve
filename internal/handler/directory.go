@@ -9,14 +9,27 @@ import (
 	"path"
 	"sort"
 	"strings"
+
+	"serve/internal/rules"
 )
 
 // serveDirectory writes an HTML listing of entries in dirPath (relative to fsys)
 // to w. urlPath is the request URL used to build links.
-func serveDirectory(w http.ResponseWriter, _ *http.Request, fsys fs.FS, dirPath, urlPath string) error {
+// set may be nil; when non-nil, entries matching IsHidden are filtered out.
+func serveDirectory(w http.ResponseWriter, _ *http.Request, fsys fs.FS, dirPath, urlPath string, set *rules.Set) error {
 	entries, err := fs.ReadDir(fsys, dirPath)
 	if err != nil {
 		return err
+	}
+
+	if set != nil {
+		filtered := entries[:0]
+		for _, e := range entries {
+			if !set.IsHidden(e.Name()) {
+				filtered = append(filtered, e)
+			}
+		}
+		entries = filtered
 	}
 
 	sort.SliceStable(entries, func(i, j int) bool {

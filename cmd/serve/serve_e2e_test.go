@@ -13,6 +13,7 @@ import (
 	"serve/internal/config"
 	"serve/internal/handler"
 	"serve/internal/listener"
+	"serve/internal/rules"
 )
 
 func TestE2E_GetHTML(t *testing.T) {
@@ -32,7 +33,7 @@ func TestE2E_GetHTML(t *testing.T) {
 	}()
 
 	cfg := config.Config{Directory: dir, NoRequestLogging: true}
-	h := handler.New(cfg, osDirFS(dir))
+	h := handler.New(cfg, osDirFS(dir), nil)
 	srv := &http.Server{Handler: h}
 	go func() { _ = srv.Serve(lns[0]) }()
 	defer func() {
@@ -57,5 +58,59 @@ func TestE2E_GetHTML(t *testing.T) {
 	body, _ := io.ReadAll(resp.Body)
 	if string(body) != "<h1>hi</h1>" {
 		t.Fatalf("body: %q", body)
+	}
+}
+
+func TestE2E_ServeJsonRedirect(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "index.html"), []byte("home"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "serve.json"),
+		[]byte(`{"redirects":[{"source":"/old","destination":"/new"}]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	lns, err := listener.Build([]string{":0"}, true)
+	if err != nil {
+		t.Fatalf("listener: %v", err)
+	}
+	defer func() {
+		for _, l := range lns {
+			_ = l.Close()
+		}
+	}()
+
+	set, err := rules.Load("", dir)
+	if err != nil {
+		t.Fatalf("rules.Load: %v", err)
+	}
+	cfg := config.Config{Directory: dir, NoRequestLogging: true}
+	h := handler.New(cfg, osDirFS(dir), set)
+
+	srv := &http.Server{Handler: h}
+	go func() { _ = srv.Serve(lns[0]) }()
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		_ = srv.Shutdown(ctx)
+	}()
+
+	// Non-following client so we can observe the 301 directly.
+	client := &http.Client{
+		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+	resp, err := client.Get("http://" + lns[0].Addr().String() + "/old")
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 301 {
+		t.Fatalf("status %d, want 301", resp.StatusCode)
+	}
+	if resp.Header.Get("Location") != "/new" {
+		t.Fatalf("Location %q", resp.Header.Get("Location"))
 	}
 }

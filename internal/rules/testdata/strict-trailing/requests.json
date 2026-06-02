@@ -1,0 +1,6 @@
+[
+  {"url": "/public/", "status": 301, "headers": {"Location": "/public"}},
+  {"url": "/public", "status": 200, "bodyContains": "Public Index"},
+  {"url": "/private/", "status": 301, "headers": {"Location": "/private"}},
+  {"url": "/private", "status": 404}
+]

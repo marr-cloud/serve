@@ -1,0 +1,7 @@
+[
+  {"url": "/", "status": 200, "bodyContains": "Home"},
+  {"url": "/about", "status": 200, "bodyContains": "About"},
+  {"url": "/about.html", "status": 301, "headers": {"Location": "/about"}},
+  {"url": "/legacy/hello", "status": 301, "headers": {"Location": "/blog/hello"}},
+  {"url": "/api/anything", "status": 200, "bodyContains": "Alice"}
+]

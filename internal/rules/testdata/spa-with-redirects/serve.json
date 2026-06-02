@@ -1,0 +1,9 @@
+{
+  "cleanUrls": true,
+  "redirects": [
+    {"source": "/legacy/:slug", "destination": "/blog/:slug"}
+  ],
+  "rewrites": [
+    {"source": "/api/**", "destination": "/api/users.json"}
+  ]
+}

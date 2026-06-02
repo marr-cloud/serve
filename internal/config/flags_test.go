@@ -49,7 +49,7 @@ func TestParseFlags(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := ParseFlags(tt.args)
+			got, _, err := ParseFlags(tt.args)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -57,5 +57,24 @@ func TestParseFlags(t *testing.T) {
 				t.Fatalf("got %+v, want %+v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestParseFlags_ReturnsCLISet(t *testing.T) {
+	cfg, set, err := ParseFlags([]string{"serve", "-p", "8080", "-s", "."})
+	if err != nil {
+		t.Fatalf("ParseFlags: %v", err)
+	}
+	if cfg.Port != 8080 {
+		t.Fatalf("Port %d, want 8080", cfg.Port)
+	}
+	if !set["p"] {
+		t.Fatalf("expected 'p' in cliSet, got %v", set)
+	}
+	if !set["s"] {
+		t.Fatalf("expected 's' in cliSet, got %v", set)
+	}
+	if set["S"] {
+		t.Fatalf("did not pass -S; should not be in cliSet")
 	}
 }

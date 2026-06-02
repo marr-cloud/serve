@@ -12,8 +12,10 @@ func (l *listenSlice) String() string     { return fmt.Sprintf("%v", []string(*l
 func (l *listenSlice) Set(v string) error { *l = append(*l, v); return nil }
 
 // ParseFlags consumes args (including program name at index 0) and returns a
-// populated Config. Errors are returned for unrecognized flags.
-func ParseFlags(args []string) (Config, error) {
+// populated Config plus a cliSet map naming every flag the user explicitly
+// set on the command line. Used by rules.Set.MergeIntoConfig to honor the
+// CLI > serve.json precedence.
+func ParseFlags(args []string) (Config, map[string]bool, error) {
 	var cfg Config
 	var listen listenSlice
 
@@ -46,11 +48,14 @@ func ParseFlags(args []string) (Config, error) {
 	fs.BoolVar(&cfg.Version, "version", false, "Displays the current version of serve")
 
 	if err := fs.Parse(args[1:]); err != nil {
-		return Config{}, err
+		return Config{}, nil, err
 	}
+	cliSet := map[string]bool{}
+	fs.Visit(func(f *flag.Flag) { cliSet[f.Name] = true })
+
 	cfg.Listen = []string(listen)
 	if positional := fs.Args(); len(positional) > 0 {
 		cfg.Directory = positional[0]
 	}
-	return cfg, nil
+	return cfg, cliSet, nil
 }

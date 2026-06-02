@@ -4,7 +4,7 @@ A static file server that aims for behavioral parity with the npm `serve` CLI, i
 
 ## Status
 
-Phase 1 (core CLI hardened). `serve.json` support is planned for Phase 2; Brotli, HTTPS, and Unix sockets are planned for Phase 3. See `docs/superpowers/specs/2026-06-01-serve-go-design.md` for the full roadmap.
+Phase 2 complete: `serve.json` parity (rewrites, redirects, headers, cleanUrls, trailingSlash, directoryListing, unlisted, renderSingle, public, symlinks). Phase 3 (Brotli, HTTPS, Unix sockets) is the next milestone. See `docs/superpowers/specs/` for the full roadmap.
 
 ## Install
 
@@ -39,7 +39,7 @@ serve -l :4000 -l :4001 ./public  # multiple listen addresses
 | `-p <port>` | Custom port (alias for `-l :port`) |
 | `-s`, `--single` | Rewrite missing routes to `index.html` (SPA mode) |
 | `-d`, `--debug` | Verbose debug output |
-| `-c`, `--config <path>` | Path to `serve.json` (planned, Phase 2) |
+| `-c`, `--config <path>` | Path to `serve.json` (see [serve.json](#servejson)) |
 | `-L`, `--no-request-logging` | Suppress per-request log lines |
 | `-C`, `--cors` | Enable CORS (`Access-Control-Allow-Origin: *`) |
 | `-n`, `--no-clipboard` | Don't copy local URL to clipboard |
@@ -50,12 +50,46 @@ serve -l :4000 -l :4001 ./public  # multiple listen addresses
 | `-v`, `--version` | Print version and exit |
 | `--help` | Print help and exit |
 
+## serve.json
+
+If a `serve.json` exists in the served directory (or you pass `-c <path>`), `serve` reads it for behavior overrides. The schema mirrors npm `serve-handler`:
+
+```json
+{
+  "public": "./dist",
+  "cleanUrls": true,
+  "trailingSlash": false,
+  "renderSingle": false,
+  "directoryListing": true,
+  "unlisted": [".git", "*.bak"],
+  "redirects": [
+    {"source": "/legacy/:slug", "destination": "/blog/:slug", "type": 301}
+  ],
+  "rewrites": [
+    {"source": "/api/:version/users", "destination": "/data/users-:version.json"}
+  ],
+  "headers": [
+    {"source": "/**.css", "headers": [{"key": "Cache-Control", "value": "public, max-age=31536000"}]}
+  ],
+  "symlinks": false
+}
+```
+
+**Pattern syntax** (`path-to-regexp` v6 subset): `:name`, `:name?`, `:name+`, `:name*`, `*`, `**`. Captures are referenced in destinations with `:name` or `$N` (positional).
+
+**Rule order on each request:** redirects → rewrites (single-pass) → cleanUrls → trailingSlash → file lookup → matching `headers` rules applied to the response.
+
+**Precedence:** CLI flags > `serve.json` > defaults. Passing `serve ./other` overrides `"public": "./dist"`; passing `-S` overrides `"symlinks": false`.
+
+**Legacy:** `now.json` (the predecessor of `serve.json`) is recognized when `serve.json` is absent.
+
 ## Behavioral notes
 
-- `gzip` and `Range` are mutually exclusive: a request with a `Range` header is served identity-encoded.
+- `gzip` and `Range` are mutually exclusive: a request with a `Range` header is served identity-encoded even if a `headers` rule sets `Content-Encoding`.
 - SPA fallback (`-s`) only applies to GET/HEAD requests with `Accept: text/html` and a URL path without a known asset extension. Requests to `/api/*` or `*.json` return 404 normally.
 - ETag is `"<modtime-unix-nanos>-<size>"`, deterministic across processes and machines.
 - Directory listings are HTML-escaped (no XSS via filenames).
+- A bare `/dir` request 301-redirects to `/dir/`, except when `trailingSlash: false` is in `serve.json`.
 
 ## Tests
 

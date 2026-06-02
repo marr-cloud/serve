@@ -1,0 +1,3 @@
+[
+  {"url": "/docs/", "status": 200, "bodyContains": "Only file"}
+]

@@ -20,7 +20,7 @@ func TestServeDirectory_EscapesAndSorts(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest("GET", "/sub/", nil)
-	if err := serveDirectory(rec, req, fsys, "sub", "/sub/"); err != nil {
+	if err := serveDirectory(rec, req, fsys, "sub", "/sub/", nil); err != nil {
 		t.Fatalf("serveDirectory: %v", err)
 	}
 	body, _ := io.ReadAll(rec.Body)
@@ -56,7 +56,7 @@ func TestServeDirectory_URLEncodesFilenames(t *testing.T) {
 	}
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest("GET", "/d/", nil)
-	if err := serveDirectory(rec, req, fsys, "d", "/d/"); err != nil {
+	if err := serveDirectory(rec, req, fsys, "d", "/d/", nil); err != nil {
 		t.Fatalf("serveDirectory: %v", err)
 	}
 	body, _ := io.ReadAll(rec.Body)
