@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"serve/internal/config"
-	"serve/internal/handler"
-	"serve/internal/listener"
+	"github.com/marr-cloud/serve/internal/config"
+	"github.com/marr-cloud/serve/internal/handler"
+	"github.com/marr-cloud/serve/internal/listener"
 )
 
 func TestE2E_UnixSocket(t *testing.T) {

@@ -10,7 +10,7 @@ import (
 	"sort"
 	"strings"
 
-	"serve/internal/rules"
+	"github.com/marr-cloud/serve/internal/rules"
 )
 
 // serveDirectory writes an HTML listing of entries in dirPath (relative to fsys)

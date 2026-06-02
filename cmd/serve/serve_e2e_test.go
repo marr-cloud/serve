@@ -18,10 +18,10 @@ import (
 	"testing"
 	"time"
 
-	"serve/internal/config"
-	"serve/internal/handler"
-	"serve/internal/listener"
-	"serve/internal/rules"
+	"github.com/marr-cloud/serve/internal/config"
+	"github.com/marr-cloud/serve/internal/handler"
+	"github.com/marr-cloud/serve/internal/listener"
+	"github.com/marr-cloud/serve/internal/rules"
 )
 
 func TestE2E_GetHTML(t *testing.T) {

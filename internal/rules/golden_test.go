@@ -10,9 +10,9 @@ import (
 	"testing/fstest"
 	"time"
 
-	"serve/internal/config"
-	"serve/internal/handler"
-	"serve/internal/rules"
+	"github.com/marr-cloud/serve/internal/config"
+	"github.com/marr-cloud/serve/internal/handler"
+	"github.com/marr-cloud/serve/internal/rules"
 )
 
 type goldenRequest struct {

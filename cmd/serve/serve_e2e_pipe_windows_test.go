@@ -15,9 +15,9 @@ import (
 
 	winio "github.com/Microsoft/go-winio"
 
-	"serve/internal/config"
-	"serve/internal/handler"
-	"serve/internal/listener"
+	"github.com/marr-cloud/serve/internal/config"
+	"github.com/marr-cloud/serve/internal/handler"
+	"github.com/marr-cloud/serve/internal/listener"
 )
 
 func TestE2E_NamedPipe(t *testing.T) {

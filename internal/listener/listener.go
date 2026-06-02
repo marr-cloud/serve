@@ -10,7 +10,7 @@ import (
 	"net"
 	"time"
 
-	"serve/internal/config"
+	"github.com/marr-cloud/serve/internal/config"
 )
 
 // ShutdownTimeout is how long Server.Shutdown waits for in-flight requests. [BUG#10]

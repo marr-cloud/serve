@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"serve/internal/config"
+	"github.com/marr-cloud/serve/internal/config"
 )
 
 // Set is the parsed, compiled view of a serve.json file. Methods are safe

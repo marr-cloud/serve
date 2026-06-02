@@ -8,14 +8,18 @@ Phase 3 complete: Brotli compression, HTTPS (`--ssl-cert`/`--ssl-key`/`--ssl-pas
 
 ## Install
 
+**Pre-built binaries** (recommended): download from the [latest release](https://github.com/marr-cloud/serve/releases/latest). Available for Linux, macOS, and Windows on amd64/arm64. Verify with `checksums.txt`.
+
+**From source:**
+
 ```bash
-go install serve/cmd/serve@latest
+go install github.com/marr-cloud/serve/cmd/serve@latest
 ```
 
-Or build from source:
+Or clone and build:
 
 ```bash
-git clone <repo>
+git clone https://github.com/marr-cloud/serve.git
 cd serve
 go build -o serve ./cmd/serve
 ```

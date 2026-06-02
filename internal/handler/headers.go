@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"path/filepath"
 
-	"serve/internal/mime"
+	"github.com/marr-cloud/serve/internal/mime"
 )
 
 // contentTypeFor returns the Content-Type for a file path. If the extension

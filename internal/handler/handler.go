@@ -9,10 +9,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"serve/internal/compress"
-	"serve/internal/config"
-	"serve/internal/mime"
-	"serve/internal/rules"
+	"github.com/marr-cloud/serve/internal/compress"
+	"github.com/marr-cloud/serve/internal/config"
+	"github.com/marr-cloud/serve/internal/mime"
+	"github.com/marr-cloud/serve/internal/rules"
 )
 
 // New returns an http.Handler that serves files from fsys according to cfg.

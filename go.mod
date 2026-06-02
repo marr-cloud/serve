@@ -1,4 +1,4 @@
-module serve
+module github.com/marr-cloud/serve
 
 go 1.22.12
 

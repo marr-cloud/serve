@@ -3,7 +3,7 @@ package rules
 import (
 	"testing"
 
-	"serve/internal/config"
+	"github.com/marr-cloud/serve/internal/config"
 )
 
 func TestMergeIntoConfig_PublicAppliedWhenNoPositional(t *testing.T) {

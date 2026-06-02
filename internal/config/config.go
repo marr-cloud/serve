@@ -1,7 +1,9 @@
 package config
 
-// Version of the serve binary. Updated per release.
-const Version = "0.1.0"
+// Version of the serve binary. Default "dev" for `go install` users;
+// release builds override via
+// -ldflags "-X github.com/marr-cloud/serve/internal/config.Version=...".
+var Version = "dev"
 
 // Config holds all CLI options. Fields map 1-1 to the npm `serve` flags.
 type Config struct {

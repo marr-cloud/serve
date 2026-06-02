@@ -15,8 +15,8 @@ import (
 
 	"github.com/andybalholm/brotli"
 
-	"serve/internal/config"
-	"serve/internal/rules"
+	"github.com/marr-cloud/serve/internal/config"
+	"github.com/marr-cloud/serve/internal/rules"
 )
 
 func mkFS() fstest.MapFS {
